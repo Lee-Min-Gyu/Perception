@@ -15,7 +15,7 @@
 #include "euclidean_cluster_node.hpp"
 #include <sys/time.h>
 #include "autoware/euclidean_cluster/utils.hpp"
-#include <pcl/common/common.h>  // getMinMax3D
+#include <pcl/common/common.h>  
 #include <sys/resource.h>
 #include <memory>
 #include <vector>
@@ -29,9 +29,11 @@ EuclideanClusterNode::EuclideanClusterNode(const rclcpp::NodeOptions & options)
   const int min_cluster_size = this->declare_parameter("min_cluster_size", 3);
   const int max_cluster_size = this->declare_parameter("max_cluster_size", 200);
   const float tolerance = this->declare_parameter("tolerance", 1.0);
-  max_x_ = this->declare_parameter("max_x", 0.50);
-  max_y_ = this->declare_parameter("max_y", 0.50);
-  max_z_ = this->declare_parameter("max_z", 0.40);
+  
+  //size_filter parameters
+  // max_x_ = this->declare_parameter("max_x", 0.50);
+  // max_y_ = this->declare_parameter("max_y", 0.50);
+  // max_z_ = this->declare_parameter("max_z", 0.40);
 
   cluster_ =
     std::make_shared<EuclideanCluster>(use_height, min_cluster_size, max_cluster_size, tolerance);
@@ -44,54 +46,26 @@ EuclideanClusterNode::EuclideanClusterNode(const rclcpp::NodeOptions & options)
   cluster_pub_ = this->create_publisher<tier4_perception_msgs::msg::DetectedObjectsWithFeature>(
     "output", rclcpp::QoS{1});
   debug_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("debug/clusters", 1);
-  stop_watch_ptr_ = std::make_unique<autoware_utils::StopWatch<std::chrono::milliseconds>>();
-  debug_publisher_ = std::make_unique<autoware_utils::DebugPublisher>(this, "euclidean_cluster");
-  stop_watch_ptr_->tic("cyclic_time");
-  stop_watch_ptr_->tic("processing_time");
+
 }
 
 void EuclideanClusterNode::onPointCloud(
   const sensor_msgs::msg::PointCloud2::ConstSharedPtr input_msg)
 {
-  stop_watch_ptr_->toc("processing_time", true);
 
   pcl::PointCloud<pcl::PointXYZ>::Ptr raw_pointcloud_ptr(new pcl::PointCloud<pcl::PointXYZ>);
   pcl::fromROSMsg(*input_msg, *raw_pointcloud_ptr);
-
   // clustering
-
   std::vector<pcl::PointCloud<pcl::PointXYZ>> clusters;
   cluster_->cluster(raw_pointcloud_ptr, clusters);
-  // /추가한 코드
-  std::vector<pcl::PointCloud<pcl::PointXYZ>> filtered_clusters;
-  for (const auto & cluster : clusters) {
-      pcl::PointXYZ min_pt, max_pt;
-      pcl::getMinMax3D(cluster, min_pt, max_pt);
-
-      double dx = max_pt.x - min_pt.x;
-      double dy = max_pt.y - min_pt.y;
-      double dz = max_pt.z - min_pt.z;
-      
-      if (dx > max_x_ || dy > max_y_ || dz > max_z_) {
-        // if (dx > 0.50) {
-        // //   RCLCPP_INFO(this->get_logger(), "over dxxxxxxxxxxxxxxxxxxxxxx dx=%.3f", dx);
-        // // } else if (dy > 0.50) {
-        // //   RCLCPP_INFO(this->get_logger(), "over dyyyyyyyyyyyyyyyyyyyyyy dy=%.3f", dy);
-        // // } else if (dz > 0.40) {
-        // //   RCLCPP_INFO(this->get_logger(), "over dzzzzzzzzzzzzzzzzzzzzzz dz=%.3f", dz);
-        // }
-          continue;  // 이거 넘는 애들은 버리자
-      }
-
-      filtered_clusters.push_back(cluster); // 통과한 클러스터만 추가
-  }
-
-  // // // build output msg
+  
+  // Without Cluster Size filtering
   tier4_perception_msgs::msg::DetectedObjectsWithFeature output;
-  convertPointCloudClusters2Msg(input_msg->header, filtered_clusters, output);
-  for (size_t i = 0; i < filtered_clusters.size(); ++i) {
+  convertPointCloudClusters2Msg(input_msg->header, clusters, output);
+
+  for (size_t i = 0; i < clusters.size(); ++i) {
     pcl::PointXYZ min_pt, max_pt;
-    pcl::getMinMax3D(filtered_clusters[i], min_pt, max_pt);
+    pcl::getMinMax3D(clusters[i], min_pt, max_pt);
 
     double dx = max_pt.x - min_pt.x;
     double dy = max_pt.y - min_pt.y;
@@ -103,24 +77,57 @@ void EuclideanClusterNode::onPointCloud(
 
     output.feature_objects[i].object.shape.type = 0; // BOX
   }
-  cluster_pub_->publish(output);
-  //여기까지//////////////////////////////////////////////////////////////////////////
+  cluster_pub_->publish(output);  
+
+
+  // Cluster Size Filtering //
+
+  // std::vector<pcl::PointCloud<pcl::PointXYZ>> filtered_clusters;
+  // for (const auto & cluster : clusters) {
+  //     pcl::PointXYZ min_pt, max_pt;
+  //     pcl::getMinMax3D(cluster, min_pt, max_pt);
+
+  //     double dx = max_pt.x - min_pt.x;
+  //     double dy = max_pt.y - min_pt.y;
+  //     double dz = max_pt.z - min_pt.z;
+      
+  //     if (dx > max_x_ || dy > max_y_ || dz > max_z_) {
+  //       // if (dx > 0.50) {
+  //       // //   RCLCPP_INFO(this->get_logger(), "over dxxxxxxxxxxxxxxxxxxxxxx dx=%.3f", dx);
+  //       // // } else if (dy > 0.50) {
+  //       // //   RCLCPP_INFO(this->get_logger(), "over dyyyyyyyyyyyyyyyyyyyyyy dy=%.3f", dy);
+  //       // // } else if (dz > 0.40) {
+  //       // //   RCLCPP_INFO(this->get_logger(), "over dzzzzzzzzzzzzzzzzzzzzzz dz=%.3f", dz);
+  //       // }
+  //         continue;  
+  //     }
+  //     filtered_clusters.push_back(cluster);
+  // }
 
   // tier4_perception_msgs::msg::DetectedObjectsWithFeature output;
-  // convertPointCloudClusters2Msg(input_msg->header, clusters, output);
+  // convertPointCloudClusters2Msg(input_msg->header, filtered_clusters, output);
+
+  // for (size_t i = 0; i < filtered_clusters.size(); ++i) {
+  //   pcl::PointXYZ min_pt, max_pt;
+  //   pcl::getMinMax3D(clusters[i], min_pt, max_pt);
+
+  //   double dx = max_pt.x - min_pt.x;
+  //   double dy = max_pt.y - min_pt.y;
+  //   double dz = max_pt.z - min_pt.z;
+
+  //   output.feature_objects[i].object.shape.dimensions.x = dx;
+  //   output.feature_objects[i].object.shape.dimensions.y = dy;
+  //   output.feature_objects[i].object.shape.dimensions.z = dz;
+
+  //   output.feature_objects[i].object.shape.type = 0; // BOX
+  // }
   // cluster_pub_->publish(output);
-  // build debug msg
 
-  if (debug_pub_->get_subscription_count() >= 1) {
-    sensor_msgs::msg::PointCloud2 debug;
-    convertObjectMsg2SensorMsg(output, debug);
-    debug_pub_->publish(debug);
-  }
 
-  
+
 }
 
-}  // namespace autoware::euclidean_cluster
+} 
 
 #include <rclcpp_components/register_node_macro.hpp>
 

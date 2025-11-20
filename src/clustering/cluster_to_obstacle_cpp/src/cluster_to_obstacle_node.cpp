@@ -13,9 +13,9 @@
 
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>   // ✅ 최신 헤더 사용
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>   
 
-#include <frenet_conversion_cpp/frenet_converter_cpp.hpp>  // ✅ 프레네 변환기
+#include <frenet_conversion_cpp/frenet_converter_cpp.hpp>  
 
 #include <vector>
 #include <string>
@@ -92,7 +92,6 @@ private:
       d_left_array_.push_back(w.d_left  - boundaries_inflation_);
     }
 
-    // ✅ 프레네 변환기 초기화
     try {
       fr_converter_ = std::make_unique<FrenetConverter>(xs, ys, psis);
     } catch (const std::exception &e) {
@@ -243,10 +242,8 @@ private:
       std::vector<double> xs, ys; xs.reserve(valids.size()); ys.reserve(valids.size());
       for (auto &v : valids) { xs.push_back(v.x); ys.push_back(v.y); }
 
-      // ✅ 올바른 API 사용: pair<vector<double>, vector<double>> 리턴
-      std::vector<double> s0_guess;  // 필요 시 car_s_ 기반으로 초기화 가능
-      // 예) s0_guess.assign(xs.size(), car_s_);
-      auto sd_pair = fr_converter_->get_frenet(xs, ys, nullptr);  // 또는 &s0_guess
+      std::vector<double> s0_guess;  //
+      auto sd_pair = fr_converter_->get_frenet(xs, ys, nullptr);  //
       const std::vector<double>& s_out = sd_pair.first;
       const std::vector<double>& d_out = sd_pair.second;
 
@@ -256,7 +253,7 @@ private:
         const double size = valids[i].size;
 
         if (!laserPointOnTrack(s, d, car_s_)) continue;
-        // if (size < min_obs_size_ || size > max_obs_size_) continue; // 원코드와 동일하게 주석
+        // if (size < min_obs_size_ || size > max_obs_size_) continue; // size filtering
 
         f110_msgs::msg::Obstacle ob;
         ob.id = static_cast<int32_t>(published);

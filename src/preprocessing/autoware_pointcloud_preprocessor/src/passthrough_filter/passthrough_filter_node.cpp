@@ -18,7 +18,7 @@ PassThroughFilterComponent::PassThroughFilterComponent(const rclcpp::NodeOptions
     set_param_res_ = this->add_on_set_parameters_callback(
         std::bind(&PassThroughFilterComponent::param_callback, this, _1));
 
-    // Z축 최대값만 필터링
+    // pcd filtering parameters
     this->declare_parameter<double>("z_max", 0.5);
     this->declare_parameter<double>("z_min", 0.0);
     this->declare_parameter<double>("x_min", -3.0); 
@@ -62,52 +62,22 @@ void PassThroughFilterComponent::filter(
     pass.setKeepOrganized(false);
     pass.filter(*tmp_cloud);
 
-    // 2. X축 필터링
-    pass.setInputCloud(tmp_cloud);
-    pass.setFilterFieldName("x");
-    pass.setFilterLimits(x_min_, x_max_);
-    pass.filter(*tmp_cloud);
+    // // 2. X축 필터링
+    // pass.setInputCloud(tmp_cloud);
+    // pass.setFilterFieldName("x");
+    // pass.setFilterLimits(x_min_, x_max_);
+    // pass.filter(*tmp_cloud);
 
-    // 3. Y축 필터링
-    pass.setInputCloud(tmp_cloud);
-    pass.setFilterFieldName("y");
-    pass.setFilterLimits(y_min_, y_max_);
-    pass.filter(*tmp_cloud);
+    // // 3. Y축 필터링
+    // pass.setInputCloud(tmp_cloud);
+    // pass.setFilterFieldName("y");
+    // pass.setFilterLimits(y_min_, y_max_);
+    // pass.filter(*tmp_cloud);
 
     // 결과 복사
     pcl::toROSMsg(*tmp_cloud, output);
     output.header = input->header;
 }
-//과거 코드 0909기준
-// void PassThroughFilterComponent::filter(
-//     const PointCloud2ConstPtr & input,
-//     const IndicesPtr & indices,
-//     PointCloud2 & output)
-// {
-//     std::scoped_lock lock(mutex_);
-
-//     if (indices) {
-//         RCLCPP_WARN(get_logger(), "Indices are not supported and will be ignored");
-//     }
-
-//     // ROS PointCloud2 -> PCL PointCloud
-//     pcl::PointCloud<pcl::PointXYZ>::Ptr pcl_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-//     pcl::fromROSMsg(*input, *pcl_cloud);
-
-//     // PassThrough 필터 생성 (z_min 없이 z_max만 제한)
-//     pcl::PassThrough<pcl::PointXYZ> pass;
-//     pass.setInputCloud(pcl_cloud);
-//     pass.setFilterFieldName("z");
-//     pass.setFilterLimits(-std::numeric_limits<double>::max(), z_max_);  // z_min은 무제한
-//     pass.setKeepOrganized(false);
-
-//     pcl::PointCloud<pcl::PointXYZ> filtered_cloud;
-//     pass.filter(filtered_cloud);
-
-//     // PCL PointCloud -> ROS PointCloud2
-//     pcl::toROSMsg(filtered_cloud, output);
-//     output.header = input->header;
-// }
 
 rcl_interfaces::msg::SetParametersResult PassThroughFilterComponent::param_callback(
     const std::vector<rclcpp::Parameter> & p)
